@@ -6,6 +6,7 @@ Based on [MatchZy](https://github.com/shobhit-pathak/MatchZy) by Shobhit Pathak,
 
 #### October 6, 2026
 
+- Practice: `.rethrow` / `.rt` / `.throw` now replay a grenade from its real release point. The throw was recorded one frame after the spawn, so the saved position was already about one tick of flight (~12 units) ahead and the rethrown trajectory drifted from the original (different bounces and landing spots on tight lineups). The position is now read from the projectile's initial position, like the launch velocity.
 - Killing a coach at the end of freeze time (or moving a coach back to their team) no longer gives money to the other team. A suicide in CS2 pays a random enemy the kill reward, and the coach removal counted as one.
 
 # 1.0.7

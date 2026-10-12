@@ -479,6 +479,21 @@ public partial class MatchZy
                     int client = player.UserId!.Value;
 
                     Vector position = new(projectile.AbsOrigin!.X, projectile.AbsOrigin.Y, projectile.AbsOrigin.Z);
+                    // This callback runs one frame after the spawn, so AbsOrigin is already about one tick
+                    // of flight (~12 units) past the real release point. Replaying that point with the
+                    // launch velocity shifted the whole trajectory forward, which showed up as a different
+                    // bounce or landing on tight lineups. m_vInitialPosition is what the engine stored at
+                    // creation (same as m_vInitialVelocity), so prefer it; the sanity bounds reject an
+                    // unset (0,0,0) or stale value and keep the AbsOrigin read.
+                    Vector launchPosition = position;
+                    {
+                        float ix = projectile.InitialPosition.X, iy = projectile.InitialPosition.Y, iz = projectile.InitialPosition.Z;
+                        float dx = ix - position.X, dy = iy - position.Y, dz = iz - position.Z;
+                        float distSq = dx * dx + dy * dy + dz * dz;
+                        bool unset = ix == 0f && iy == 0f && iz == 0f;
+                        if (!unset && !float.IsNaN(distSq) && distSq <= 150f * 150f)
+                            launchPosition = new Vector(ix, iy, iz);
+                    }
                     QAngle angle = new(projectile.AbsRotation!.X, projectile.AbsRotation.Y, projectile.AbsRotation.Z);
                     // Prefer m_vInitialVelocity: the engine sets it when it creates the projectile
                     // (the launch velocity), while AbsVelocity can still read ~0 one frame after spawn.
@@ -534,7 +549,7 @@ public partial class MatchZy
                     float velMagSq = velocity.X * velocity.X + velocity.Y * velocity.Y + velocity.Z * velocity.Z;
                     if (velMagSq >= 2500f)
                     {
-                        RecordThrownNade(client, nadeType, position, angle, playerOrigin, eyeAngles, itemIndex, duckAmount, velocity, angularVelocity);
+                        RecordThrownNade(client, nadeType, launchPosition, angle, playerOrigin, eyeAngles, itemIndex, duckAmount, velocity, angularVelocity);
                     }
                     else
                     {
@@ -559,7 +574,7 @@ public partial class MatchZy
                                     Log($"[GrenadeRecord] {nadeType} from userid {client} not recorded: no launch velocity (dropped, not thrown).");
                                     return;
                                 }
-                                RecordThrownNade(client, nadeType, p0, angle, playerOrigin, eyeAngles, itemIndex, duckAmount, recovered, angularVelocity);
+                                RecordThrownNade(client, nadeType, launchPosition, angle, playerOrigin, eyeAngles, itemIndex, duckAmount, recovered, angularVelocity);
                             }
                             catch (Exception ex)
                             {
