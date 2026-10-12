@@ -1,0 +1,60 @@
+name: Build plugin
+# Test build: compiles the plugin and uploads the same package layout the release uses as a
+# downloadable workflow artifact. It never creates a release or a tag; releases stay in release.yml.
+# Run it from the Actions tab (Run workflow, any branch) or let it run on every branch push.
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    env:
+      # Auth for the "forgejo" NuGet source in nuget.config (same secrets as release.yml).
+      NuGetPackageSourceCredentials_forgejo: "Username=${{ secrets.FORGEJO_USER || 'mikkel' }};Password=${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Get MatchZy version
+        id: version
+        run: |
+          VERSION=$(grep -oP 'ModuleVersion\s*=>\s*"\K[^"]*' Core/MatchZy.cs)
+          if [ -z "$VERSION" ]; then
+            echo "Error: Could not extract version from Core/MatchZy.cs"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=MatchZy-$VERSION-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0"
+
+      - name: Build package
+        run: |
+          set -e
+          dotnet publish -c Release -o package/addons/counterstrikesharp/plugins/MatchZy
+          # Same layout as the release zip: extract into game/csgo/.
+          mkdir -p package/addons/counterstrikesharp/gamedata
+          cp gamedata/matchzy.json package/addons/counterstrikesharp/gamedata/matchzy.json
+
+      # The artifact is zipped by GitHub, so it downloads as <name>.zip with addons/ inside.
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.name }}
+          path: package/
+          if-no-files-found: error
+          retention-days: 30
